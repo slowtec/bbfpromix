@@ -1,4 +1,5 @@
 use std::{
+    alloc::{alloc, Layout},
     env,
     ffi::{c_char, c_void, CStr, CString},
     mem, ptr,
@@ -13,6 +14,8 @@ use gtk_sys::*;
 mod channel;
 mod settings;
 
+use self::{channel::*, settings::*};
+
 #[allow(non_camel_case_types)]
 type gpointer = *mut c_void;
 
@@ -21,8 +24,8 @@ type gint = i32;
 
 const G_APPLICATION_FLAGS_NONE: u32 = 0;
 
-// #define BBF_NOF_INPUTS 12
-// #define BBF_NOF_OUTPUTS 6
+const BBF_NOF_INPUTS: usize = 12;
+const BBF_NOF_OUTPUTS: usize = 6;
 // #define BBF_VOL_MAX 65536
 // #define BBF_VOL_MIN 0
 // #define BBF_VOL_SLIDER_MAX 120
@@ -32,33 +35,55 @@ const G_APPLICATION_FLAGS_NONE: u32 = 0;
 
 const TRUE: i32 = 1;
 
-// static const char * const BBF_INPUTS[BBF_NOF_INPUTS] = {
-//     "AN1", "AN2", "IN3", "IN4", "AS1", "AS2", "ADAT3", "ADAT4", "ADAT5",
-//     "ADAT6", "ADAT7", "ADAT8"
-// };
-//
-// static const char * const BBF_OUTPUTS[BBF_NOF_OUTPUTS][2] = {
-//     { "AN1", "AN2" },
-//     { "PH3", "PH4" },
-//     { "AS1", "AS2" },
-//     { "ADAT3", "ADAT4" },
-//     { "ADAT5", "ADAT6" },
-//     { "ADAT7", "ADAT8" }
-// };
+const BBF_INPUTS: [&str; BBF_NOF_INPUTS] = [
+    "AN1", "AN2", "IN3", "IN4", "AS1", "AS2", "ADAT3", "ADAT4", "ADAT5", "ADAT6", "ADAT7", "ADAT8",
+];
+
+const BBF_OUTPUTS: [[&str; 2]; BBF_NOF_OUTPUTS] = [
+    ["AN1", "AN2"],
+    ["PH3", "PH4"],
+    ["AS1", "AS2"],
+    ["ADAT3", "ADAT4"],
+    ["ADAT5", "ADAT6"],
+    ["ADAT7", "ADAT8"],
+];
 
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 struct bbf_app_data_t {
-    // bbf_channel_t input_channels[BBF_NOF_INPUTS];
-    // bbf_channel_t playback_channels[BBF_NOF_INPUTS];
-    // bbf_settings_t general_settings;
-    mixer: *mut snd_mixer_t, // bool no_signals;
+    input_channels: [*mut bbf_channel_t; BBF_NOF_INPUTS],
+    playback_channels: [*mut bbf_channel_t; BBF_NOF_INPUTS],
+    general_settings: *mut bbf_settings_t,
+    mixer: *mut snd_mixer_t,
+    // bool no_signals;
 }
 
 impl bbf_app_data_t {
     fn new() -> Self {
+        let mut input_channels = [ptr::null_mut(); BBF_NOF_INPUTS];
+        let mut playback_channels = [ptr::null_mut(); BBF_NOF_INPUTS];
+
+        for i in 0..BBF_NOF_INPUTS {
+            let layout = Layout::new::<bbf_channel_t>();
+            let channel_ptr = unsafe { alloc(layout) as *mut bbf_channel_t };
+            input_channels[i] = channel_ptr;
+        }
+
+        for i in 0..BBF_NOF_INPUTS {
+            let layout = Layout::new::<bbf_channel_t>();
+            let channel_ptr = unsafe { alloc(layout) as *mut bbf_channel_t };
+            playback_channels[i] = channel_ptr;
+        }
+
         let mixer = ptr::null_mut();
-        Self { mixer }
+        let general_settings = ptr::null_mut();
+
+        Self {
+            mixer,
+            input_channels,
+            playback_channels,
+            general_settings,
+        }
     }
 }
 
@@ -146,15 +171,15 @@ impl bbf_app_data_t {
 //         bbf_channel_reset(&app_data->playback_channels[i]);
 //     }
 // }
-//
-// static void on_output_changed(GtkComboBox* combo, gpointer user_data) {
-//     bbf_app_data_t *app_data = (bbf_app_data_t*)user_data;
-//     gint entry_id = gtk_combo_box_get_active(combo);
-//     for (int i = 0 ; i < BBF_NOF_INPUTS ; ++i) {
-//         bbf_channel_set_output(&app_data->input_channels[i], entry_id);
-//         bbf_channel_set_output(&app_data->playback_channels[i], entry_id);
-//     }
-// }
+
+fn on_output_changed(_combo: GtkComboBox, _user_data: gpointer) {
+    // bbf_app_data_t *app_data = (bbf_app_data_t*)user_data;
+    // gint entry_id = gtk_combo_box_get_active(combo);
+    // for (int i = 0 ; i < BBF_NOF_INPUTS ; ++i) {
+    //     bbf_channel_set_output(&app_data->input_channels[i], entry_id);
+    //     bbf_channel_set_output(&app_data->playback_channels[i], entry_id);
+    // }
+}
 
 unsafe extern "C" fn on_timeout(user_data: gpointer) -> gint {
     let app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
@@ -180,14 +205,10 @@ unsafe extern "C" fn on_timeout(user_data: gpointer) -> gint {
 
 unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
     log::debug!("Activate GTK application");
-    let _app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
-
-    // GtkWidget *label_inputs, *label_playbacks, *label_output, *label_clock;
-    // GtkWidget *separator;
-    // GtkWidget *cb_output;
+    let app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
 
     // Initialize the main window
-    let main_window = unsafe { gtk_application_window_new(app) };
+    let main_window = gtk_application_window_new(app);
     let title = CString::new("Babyface Pro Mixer").unwrap();
     gtk_window_set_title(main_window as *mut GtkWindow, title.as_ptr());
     gtk_window_set_default_size(main_window as *mut GtkWindow, 800, 600);
@@ -196,92 +217,128 @@ unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
     let main_grid = gtk_grid_new() as *mut GtkGrid;
     gtk_grid_set_column_homogeneous(main_grid, 1);
 
-    // // Inputs
-    // label_inputs = gtk_label_new("Hardware Inputs");
-    // gtk_widget_set_hexpand(label_inputs, TRUE);
-    // gtk_grid_attach(main_grid, label_inputs, 0, 0, 24, 1);
-    //
-    // for (int i = 0 ; i < BBF_NOF_INPUTS ; ++i) {
-    //     bbf_channel_t *ic = &app_data->input_channels[i];
-    //     if (i < 2) {
-    //         // Mic channel
-    //         bbf_channel_init(ic, MIC, BBF_INPUTS[i]);
-    //         gtk_grid_attach(main_grid, ic->lbl_name, i*2, 1, 2, 1);
-    //         gtk_grid_attach(main_grid, ic->bt_PAD, i*2, 2, 1, 1);
-    //         gtk_grid_attach(main_grid, ic->bt_48V, i*2+1, 2, 1, 1);
-    //     } else if (i > 1 && i < 4) {
-    //         // Instrument channel
-    //         bbf_channel_init(ic, INSTR, BBF_INPUTS[i]);
-    //         gtk_grid_attach(main_grid, ic->lbl_name, i*2, 1, 2, 1);
-    //         gtk_grid_attach(main_grid, ic->cb_Sens, i*2, 2, 2, 1);
-    //     } else {
-    //         // Line channel
-    //         bbf_channel_init(ic, LINE, BBF_INPUTS[i]);
-    //         gtk_grid_attach(main_grid, ic->lbl_name, i*2, 1, 2, 1);
-    //     }
-    //     gtk_grid_attach(main_grid, ic->sc_pan, i*2, 3, 2, 1);
-    //     gtk_widget_set_vexpand(ic->sc_vol, TRUE);
-    //     gtk_grid_attach(main_grid, ic->sc_vol, i*2, 4, 2, 2);
-    // }
-    //
-    // separator = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
-    // gtk_grid_attach(main_grid, separator, 0, 6, 24, 1);
-    //
-    // // Playbacks
-    // label_playbacks = gtk_label_new("Software Playback");
-    // gtk_widget_set_hexpand(label_playbacks, TRUE);
-    // gtk_grid_attach(main_grid, label_playbacks, 0, 7, 24, 1);
-    //
-    // int pc_count = 0;
-    // for (int i = 0 ; i < BBF_NOF_OUTPUTS ; ++i) {
-    //     bbf_channel_t *pc = &app_data->playback_channels[pc_count];
-    //     bbf_channel_init(pc, PCM, BBF_OUTPUTS[i][0]);
-    //     gtk_grid_attach(main_grid, pc->lbl_name, pc_count*2, 8, 2, 1);
-    //     gtk_grid_attach(main_grid, pc->sc_pan, pc_count*2, 9, 2, 1);
-    //     gtk_widget_set_vexpand(pc->sc_vol, TRUE);
-    //     gtk_grid_attach(main_grid, pc->sc_vol, pc_count*2, 10, 2, 2);
-    //     pc_count++;
-    //
-    //     pc = &app_data->playback_channels[pc_count];
-    //     bbf_channel_init(pc, PCM, BBF_OUTPUTS[i][1]);
-    //     gtk_grid_attach(main_grid, pc->lbl_name, pc_count*2, 8, 2, 1);
-    //     gtk_grid_attach(main_grid, pc->sc_pan, pc_count*2, 9, 2, 1);
-    //     gtk_widget_set_vexpand(pc->sc_vol, TRUE);
-    //     gtk_grid_attach(main_grid, pc->sc_vol, pc_count*2, 10, 2, 2);
-    //     pc_count++;
-    // }
-    //
-    // // Output selector
-    // label_output = gtk_label_new("Hardware Output:");
-    // gtk_grid_attach(main_grid, label_output, 0, 12, 2, 1);
-    // cb_output = gtk_combo_box_text_new();
-    // for (int i = 0 ; i < BBF_NOF_OUTPUTS ; ++i) {
-    //     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(cb_output), NULL,
-    //                               g_strdup_printf("%s/%s", BBF_OUTPUTS[i][0],
-    //                                               BBF_OUTPUTS[i][1]));
-    // }
-    // g_signal_connect(cb_output, "changed", *G_CALLBACK(on_output_changed),
-    //                  app_data);
-    // gtk_grid_attach(main_grid, cb_output, 2, 12, 2, 1);
-    //
-    // // Settings
-    // bbf_settings_init(&app_data->general_settings);
-    //
-    // // Clock
-    // label_clock = gtk_label_new("Clock Mode:");
-    // gtk_grid_attach(main_grid, label_clock, 4, 12, 2, 1);
-    // gtk_grid_attach(main_grid, app_data->general_settings.cb_clock,
-    //                 6, 12, 2, 1);
-    //
-    // // SPDIF
-    // gtk_grid_attach(main_grid, app_data->general_settings.bt_spdif,
-    //                 10, 12, 2, 1);
-    // // SPDIF Emph
-    // gtk_grid_attach(main_grid, app_data->general_settings.bt_spdif_emph,
-    //                 12, 12, 2, 1);
-    // // SPDIF Pro
-    // gtk_grid_attach(main_grid, app_data->general_settings.bt_spdif_pro,
-    //                 14, 12, 2, 1);
+    // Inputs
+    let label_text = CString::new("Hardware Inputs").unwrap();
+    let label_inputs = gtk_label_new(label_text.as_ptr());
+    gtk_widget_set_hexpand(label_inputs, TRUE);
+    gtk_grid_attach(main_grid, label_inputs, 0, 0, 24, 1);
+
+    for i in 0..BBF_NOF_INPUTS {
+        let ic: &mut bbf_channel_t = &mut *app_data.input_channels[i];
+
+        if i < 2 {
+            // Mic channel
+            bbf_channel_init(ic, bbf_channel_type::MIC, BBF_INPUTS[i]);
+            gtk_grid_attach(main_grid, ic.lbl_name, i as i32 * 2, 1, 2, 1);
+            gtk_grid_attach(main_grid, ic.bt_PAD, i as i32 * 2, 2, 1, 1);
+            gtk_grid_attach(main_grid, ic.bt_48V, i as i32 * 2 + 1, 2, 1, 1);
+        } else if i > 1 && i < 4 {
+            // Instrument channel
+            bbf_channel_init(ic, bbf_channel_type::INSTR, BBF_INPUTS[i]);
+            gtk_grid_attach(main_grid, ic.lbl_name, i as i32 * 2, 1, 2, 1);
+            gtk_grid_attach(main_grid, ic.cb_Sens, i as i32 * 2, 2, 2, 1);
+        } else {
+            // Line channel
+            bbf_channel_init(ic, bbf_channel_type::LINE, BBF_INPUTS[i]);
+            gtk_grid_attach(main_grid, ic.lbl_name, i as i32 * 2, 1, 2, 1);
+        }
+        gtk_grid_attach(main_grid, ic.sc_pan, i as i32 * 2, 3, 2, 1);
+        gtk_widget_set_vexpand(ic.sc_vol, TRUE);
+        gtk_grid_attach(main_grid, ic.sc_vol, i as i32 * 2, 4, 2, 2);
+    }
+
+    let separator = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_grid_attach(main_grid, separator, 0, 6, 24, 1);
+
+    // Playbacks
+    let label_text = CString::new("Software Playback").unwrap();
+    let label_playbacks = gtk_label_new(label_text.as_ptr());
+    gtk_widget_set_hexpand(label_playbacks, TRUE);
+    gtk_grid_attach(main_grid, label_playbacks, 0, 7, 24, 1);
+
+    let mut pc_count = 0;
+    for i in 0..BBF_NOF_OUTPUTS {
+        let pc: &mut bbf_channel_t = &mut *app_data.playback_channels[pc_count];
+        bbf_channel_init(pc, bbf_channel_type::PCM, BBF_OUTPUTS[i][0]);
+        gtk_grid_attach(main_grid, pc.lbl_name, pc_count as i32 * 2, 8, 2, 1);
+        gtk_grid_attach(main_grid, pc.sc_pan, pc_count as i32 * 2, 9, 2, 1);
+        gtk_widget_set_vexpand(pc.sc_vol, TRUE);
+        gtk_grid_attach(main_grid, pc.sc_vol, pc_count as i32 * 2, 10, 2, 2);
+        pc_count += 1;
+
+        let pc: &mut bbf_channel_t = &mut *app_data.playback_channels[pc_count];
+        bbf_channel_init(pc, bbf_channel_type::PCM, BBF_OUTPUTS[i][1]);
+        gtk_grid_attach(main_grid, pc.lbl_name, pc_count as i32 * 2, 8, 2, 1);
+        gtk_grid_attach(main_grid, pc.sc_pan, pc_count as i32 * 2, 9, 2, 1);
+        gtk_widget_set_vexpand(pc.sc_vol, TRUE);
+        gtk_grid_attach(main_grid, pc.sc_vol, pc_count as i32 * 2, 10, 2, 2);
+        pc_count += 1;
+    }
+
+    // Output selector
+    let label_text = CString::new("Hardware Output:").unwrap();
+    let label_output = gtk_label_new(label_text.as_ptr());
+    gtk_grid_attach(main_grid, label_output, 0, 12, 2, 1);
+    let cb_output = gtk_combo_box_text_new();
+    for i in 0..BBF_NOF_OUTPUTS {
+        let txt = CString::new(format!("{}/{}", BBF_OUTPUTS[i][0], BBF_OUTPUTS[i][1])).unwrap();
+        gtk_combo_box_text_append(cb_output as *mut GtkComboBoxText, ptr::null(), txt.as_ptr());
+    }
+    g_signal_connect_data(
+        cb_output as *mut _,
+        CStr::from_bytes_with_nul_unchecked(b"changed\0").as_ptr(),
+        Some(mem::transmute(on_output_changed as *const ())),
+        user_data,
+        None,
+        0,
+    );
+    gtk_grid_attach(main_grid, cb_output, 2, 12, 2, 1);
+
+    // Settings
+    bbf_settings_init(&mut *app_data.general_settings);
+
+    // Clock
+    let label_text = CString::new("Clock Mode:").unwrap();
+    let label_clock = gtk_label_new(label_text.as_ptr());
+    gtk_grid_attach(main_grid, label_clock, 4, 12, 2, 1);
+    gtk_grid_attach(
+        main_grid,
+        (*app_data.general_settings).cb_clock,
+        6,
+        12,
+        2,
+        1,
+    );
+
+    // SPDIF
+    gtk_grid_attach(
+        main_grid,
+        (*app_data.general_settings).bt_spdif,
+        10,
+        12,
+        2,
+        1,
+    );
+
+    // SPDIF Emph
+    gtk_grid_attach(
+        main_grid,
+        (*app_data.general_settings).bt_spdif_emph,
+        12,
+        12,
+        2,
+        1,
+    );
+
+    // SPDIF Pro
+    gtk_grid_attach(
+        main_grid,
+        (*app_data.general_settings).bt_spdif_pro,
+        14,
+        12,
+        2,
+        1,
+    );
 
     gtk_widget_set_hexpand(main_grid as *mut GtkWidget, TRUE);
     gtk_container_add(

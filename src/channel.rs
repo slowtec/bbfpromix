@@ -1,10 +1,14 @@
-// typedef enum __channel_type {
-//     MIC = 0,
-//     INSTR,
-//     LINE,
-//     PCM
-// } bbf_channel_type;
-//
+use gtk_sys::*;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(non_camel_case_types)]
+pub enum bbf_channel_type {
+    MIC = 0,
+    INSTR,
+    LINE,
+    PCM,
+}
+
 // typedef struct __output {
 //     bbf_channel_type type;
 //     const char *name_l;
@@ -12,24 +16,27 @@
 //     snd_mixer_elem_t *elem_l;
 //     snd_mixer_elem_t *elem_r;
 // } bbf_output_t;
-//
-// typedef struct __channel {
-//     const char *name;
-//     bbf_output_t outputs[BBF_NOF_OUTPUTS];
-//     bbf_output_t *cur_output;
-//     GtkWidget *bt_48V;
-//     GtkWidget *bt_PAD;
-//     GtkWidget *cb_Sens;
-//     GtkWidget *sc_vol;
-//     GtkWidget *sc_pan;
-//     GtkWidget *lbl_name;
-//     bool no_signals;
-//     bbf_channel_type type;
-//     snd_mixer_elem_t *phantom;
-//     snd_mixer_elem_t *pad;
-//     snd_mixer_elem_t *sens;
-// } bbf_channel_t;
-//
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
+pub struct bbf_channel_t {
+    //  const char *name;
+    //  bbf_output_t outputs[BBF_NOF_OUTPUTS];
+    //  bbf_output_t *cur_output;
+    pub bt_48V: *mut GtkWidget,
+    pub bt_PAD: *mut GtkWidget,
+    pub cb_Sens: *mut GtkWidget,
+    pub sc_vol: *mut GtkWidget,
+    pub sc_pan: *mut GtkWidget,
+    pub lbl_name: *mut GtkWidget,
+    // bool no_signals;
+    // bbf_channel_type type;
+    // snd_mixer_elem_t *phantom;
+    // snd_mixer_elem_t *pad;
+    // snd_mixer_elem_t *sens;
+}
+
 // static int on_selem_changed(snd_mixer_elem_t *elem, unsigned int mask) {
 //     bbf_channel_t *c =
 //         (bbf_channel_t*)snd_mixer_elem_get_callback_private(elem);
@@ -193,68 +200,66 @@
 //     return g_strdup_printf("-inf");
 //     */
 // }
-//
-// /** \brief Initialises a channel
-//  *
-//  * \param a pointer to an instance of bbf_channel_t
-//  * \param the type of the channel (MIC, LINE, INSTR, PCM)
-//  */
-// void bbf_channel_init(bbf_channel_t *channel, bbf_channel_type type,
-//                       const char *name) {
-//
-//     channel->cur_output = NULL;
-//     channel->pad = NULL;
-//     channel->phantom = NULL;
-//     channel->sens = NULL;
-//     channel->no_signals = false;
-//     channel->name = name;
-//     channel->type = type;
-//
-//     for (int i = 0 ; i < BBF_NOF_OUTPUTS ; ++i) {
-//         channel->outputs[i].name_l = BBF_OUTPUTS[i][0];
-//         channel->outputs[i].name_r = BBF_OUTPUTS[i][1];
-//         channel->outputs[i].elem_l = NULL;
-//         channel->outputs[i].elem_r = NULL;
-//     }
-//
-//     channel->lbl_name = gtk_label_new(name);
-//     channel->sc_pan = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
-//                                                -100, 100, 1);
-//     gtk_range_set_value(GTK_RANGE(channel->sc_pan), 0);
-//     gtk_scale_add_mark(GTK_SCALE(channel->sc_pan), 0, GTK_POS_TOP, NULL);
-//     g_signal_connect(channel->sc_pan, "value-changed",
-//                      *G_CALLBACK(on_slider_changed), channel);
-//
-//     channel->sc_vol = gtk_scale_new_with_range(GTK_ORIENTATION_VERTICAL,
-//                                                BBF_VOL_SLIDER_MIN,
-// 					       BBF_VOL_SLIDER_MAX, 1);
-//     gtk_range_set_inverted(GTK_RANGE(channel->sc_vol), 1);
-//     gtk_scale_add_mark(GTK_SCALE(channel->sc_vol), BBF_VOL_SLIDER_ZERO_DB,
-// 		       GTK_POS_RIGHT, NULL);
-//     g_signal_connect(channel->sc_vol, "value-changed",
-//                      *G_CALLBACK(on_slider_changed), channel);
-//     g_signal_connect(channel->sc_vol, "format-value",
-//                      *G_CALLBACK(on_slider_format_value), channel);
-//
-//
-//     if (channel->type == MIC) {
-//         channel->bt_48V = gtk_toggle_button_new_with_label("48V");
-//         g_signal_connect(channel->bt_48V, "toggled",
-//                          *G_CALLBACK(on_bt_toggled_48V), channel);
-//         channel->bt_PAD = gtk_toggle_button_new_with_label("PAD");
-//         g_signal_connect(channel->bt_PAD, "toggled",
-//                          *G_CALLBACK(on_bt_toggled_PAD), channel);
-//     } else if (channel->type == INSTR) {
-//         channel->cb_Sens = gtk_combo_box_text_new();
-//         gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(channel->cb_Sens),
-//                                   NULL, "-10 dBV");
-//         gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(channel->cb_Sens),
-//                                   NULL, "+4 dBu");
-//         g_signal_connect(channel->cb_Sens, "changed",
-//                          *G_CALLBACK(on_cb_sens), channel);
-//     }
-// }
-//
+
+pub unsafe fn bbf_channel_init(
+    _channel: &mut bbf_channel_t,
+    r#_type: bbf_channel_type,
+    _name: &'static str,
+) {
+    //
+    //     channel->cur_output = NULL;
+    //     channel->pad = NULL;
+    //     channel->phantom = NULL;
+    //     channel->sens = NULL;
+    //     channel->no_signals = false;
+    //     channel->name = name;
+    //     channel->type = type;
+    //
+    //     for (int i = 0 ; i < BBF_NOF_OUTPUTS ; ++i) {
+    //         channel->outputs[i].name_l = BBF_OUTPUTS[i][0];
+    //         channel->outputs[i].name_r = BBF_OUTPUTS[i][1];
+    //         channel->outputs[i].elem_l = NULL;
+    //         channel->outputs[i].elem_r = NULL;
+    //     }
+    //
+    //     channel->lbl_name = gtk_label_new(name);
+    //     channel->sc_pan = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,
+    //                                                -100, 100, 1);
+    //     gtk_range_set_value(GTK_RANGE(channel->sc_pan), 0);
+    //     gtk_scale_add_mark(GTK_SCALE(channel->sc_pan), 0, GTK_POS_TOP, NULL);
+    //     g_signal_connect(channel->sc_pan, "value-changed",
+    //                      *G_CALLBACK(on_slider_changed), channel);
+    //
+    //     channel->sc_vol = gtk_scale_new_with_range(GTK_ORIENTATION_VERTICAL,
+    //                                                BBF_VOL_SLIDER_MIN,
+    // 					       BBF_VOL_SLIDER_MAX, 1);
+    //     gtk_range_set_inverted(GTK_RANGE(channel->sc_vol), 1);
+    //     gtk_scale_add_mark(GTK_SCALE(channel->sc_vol), BBF_VOL_SLIDER_ZERO_DB,
+    // 		       GTK_POS_RIGHT, NULL);
+    //     g_signal_connect(channel->sc_vol, "value-changed",
+    //                      *G_CALLBACK(on_slider_changed), channel);
+    //     g_signal_connect(channel->sc_vol, "format-value",
+    //                      *G_CALLBACK(on_slider_format_value), channel);
+    //
+    //
+    //     if (channel->type == MIC) {
+    //         channel->bt_48V = gtk_toggle_button_new_with_label("48V");
+    //         g_signal_connect(channel->bt_48V, "toggled",
+    //                          *G_CALLBACK(on_bt_toggled_48V), channel);
+    //         channel->bt_PAD = gtk_toggle_button_new_with_label("PAD");
+    //         g_signal_connect(channel->bt_PAD, "toggled",
+    //                          *G_CALLBACK(on_bt_toggled_PAD), channel);
+    //     } else if (channel->type == INSTR) {
+    //         channel->cb_Sens = gtk_combo_box_text_new();
+    //         gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(channel->cb_Sens),
+    //                                   NULL, "-10 dBV");
+    //         gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(channel->cb_Sens),
+    //                                   NULL, "+4 dBu");
+    //         g_signal_connect(channel->cb_Sens, "changed",
+    //                          *G_CALLBACK(on_cb_sens), channel);
+    //     }
+}
+
 // void bbf_channel_reset(bbf_channel_t *channel) {
 //     for (int i = 0 ; i < BBF_NOF_OUTPUTS ; ++i) {
 //         channel->outputs[i].elem_l = NULL;

@@ -1,15 +1,19 @@
-// typedef struct __bbf_settings {
-// 	GtkWidget *cb_clock;
-// 	GtkWidget *bt_spdif;
-// 	GtkWidget *bt_spdif_pro;
-// 	GtkWidget *bt_spdif_emph;
-// 	snd_mixer_elem_t *clock;
-// 	snd_mixer_elem_t *spdif;
-// 	snd_mixer_elem_t *spdif_pro;
-// 	snd_mixer_elem_t *spdif_emph;
-// 	bool no_signals;
-// } bbf_settings_t;
-//
+use gtk_sys::*;
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub struct bbf_settings_t {
+    pub cb_clock: *mut GtkWidget,
+    pub bt_spdif: *mut GtkWidget,
+    pub bt_spdif_pro: *mut GtkWidget,
+    pub bt_spdif_emph: *mut GtkWidget,
+    // snd_mixer_elem_t *clock;
+    // snd_mixer_elem_t *spdif;
+    // snd_mixer_elem_t *spdif_pro;
+    // snd_mixer_elem_t *spdif_emph;
+    // bool no_signals;
+}
+
 // static void on_bt_toggled_spdif(GtkWidget *button, gpointer *user_data) {
 //     bbf_settings_t *gs = (bbf_settings_t*)user_data;
 //
@@ -192,31 +196,31 @@
 //
 //     return false;
 // }
-//
-// void bbf_settings_init(bbf_settings_t *gs) {
-//     gs->clock = NULL;
-//     gs->spdif = NULL;
-//     gs->spdif_emph = NULL;
-//     gs->spdif_pro = NULL;
-//     gs->no_signals = false;
-//     gs->cb_clock = gtk_combo_box_text_new();
-//     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(gs->cb_clock), NULL,
-//                               "AutoSync");
-//     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(gs->cb_clock), NULL,
-//                               "Internal");
-//     g_signal_connect(gs->cb_clock, "changed",
-//                      *G_CALLBACK(on_clock_changed),
-//                      gs);
-//
-//     gs->bt_spdif = gtk_toggle_button_new_with_label("SPDIF");
-//     g_signal_connect(gs->bt_spdif, "toggled",
-//                          *G_CALLBACK(on_bt_toggled_spdif), gs);
-//
-//     gs->bt_spdif_emph = gtk_toggle_button_new_with_label("SPDIF Emph.");
-//     g_signal_connect(gs->bt_spdif_emph, "toggled",
-//                          *G_CALLBACK(on_bt_toggled_spdif_emph), gs);
-//
-//     gs->bt_spdif_pro = gtk_toggle_button_new_with_label("SPDIF Pro");
-//     g_signal_connect(gs->bt_spdif_pro, "toggled",
-//                          *G_CALLBACK(on_bt_toggled_spdif_pro), gs);
-// }
+
+pub fn bbf_settings_init(_gs: &mut bbf_settings_t) {
+    // gs->clock = NULL;
+    // gs->spdif = NULL;
+    // gs->spdif_emph = NULL;
+    // gs->spdif_pro = NULL;
+    // gs->no_signals = false;
+    // gs->cb_clock = gtk_combo_box_text_new();
+    // gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(gs->cb_clock), NULL,
+    //                           "AutoSync");
+    // gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(gs->cb_clock), NULL,
+    //                           "Internal");
+    // g_signal_connect(gs->cb_clock, "changed",
+    //                  *G_CALLBACK(on_clock_changed),
+    //                  gs);
+    //
+    // gs->bt_spdif = gtk_toggle_button_new_with_label("SPDIF");
+    // g_signal_connect(gs->bt_spdif, "toggled",
+    //                      *G_CALLBACK(on_bt_toggled_spdif), gs);
+    //
+    // gs->bt_spdif_emph = gtk_toggle_button_new_with_label("SPDIF Emph.");
+    // g_signal_connect(gs->bt_spdif_emph, "toggled",
+    //                      *G_CALLBACK(on_bt_toggled_spdif_emph), gs);
+    //
+    // gs->bt_spdif_pro = gtk_toggle_button_new_with_label("SPDIF Pro");
+    // g_signal_connect(gs->bt_spdif_pro, "toggled",
+    //                      *G_CALLBACK(on_bt_toggled_spdif_pro), gs);
+}
