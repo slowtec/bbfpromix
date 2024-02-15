@@ -15,3 +15,10 @@ glib-sys = "0.19.0"
 gobject-sys = "0.19.0"
 gtk-sys = "0.18.0"
 log = "0.4.20"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
