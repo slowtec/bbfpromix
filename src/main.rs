@@ -33,6 +33,9 @@ const BBF_VOL_SLIDER_MIN: f64 = 0.0;
 const BBF_VOL_SLIDER_ZERO_DB: f64 = 100.0;
 const BBF_VOL_ZERO_DB: f64 = BBF_VOL_MAX as f64 / 2.0;
 
+const SND_CTL_EVENT_MASK_REMOVE: u32 = !0;
+const SND_CTL_EVENT_MASK_VALUE: u32 = 1 << 0;
+
 const TRUE: i32 = 1;
 
 const BBF_INPUTS: [&str; BBF_NOF_INPUTS] = [
@@ -55,7 +58,6 @@ struct bbf_app_data_t {
     playback_channels: [*mut bbf_channel_t; BBF_NOF_INPUTS],
     general_settings: *mut bbf_settings_t,
     mixer: *mut snd_mixer_t,
-    // bool no_signals;
 }
 
 impl bbf_app_data_t {
@@ -90,97 +92,113 @@ impl bbf_app_data_t {
     }
 }
 
-// static int connect_alsa_mixer(bbf_app_data_t *app_data) {
-//     int err;
-//     const char* card = NULL;
-//     snd_ctl_card_info_t* info;
-//     snd_ctl_card_info_alloca(&info);
-//     int number = -1;
-//     while (!card) {
-//         int err = snd_card_next(&number);
-//         if (err < 0 || number < 0) {
-//             break;
-//         }
-//         snd_ctl_t* ctl;
-//         char buf[16];
-//         sprintf (buf, "hw:%d", number);
-//         err = snd_ctl_open(&ctl, buf, 0);
-//         if (err < 0) {
-//             continue;
-//         }
-//         err = snd_ctl_card_info(ctl, info);
-//         snd_ctl_close(ctl);
-//         if (err < 0) {
-//             continue;
-//         }
-//         const char* card_name = snd_ctl_card_info_get_name (info);
-//         if (!card_name) {
-//             continue;
-//         }
-//         if (strstr(card_name, "Babyface Pro") != NULL) {
-//             // card found
-//             card = buf;
-//         }
-//     }
-//     if (!card)
-//         return -1;
-//     err = snd_mixer_open(&app_data->mixer, 0);
-//     if (err < 0)
-//         return -2;
-//
-//     err = snd_mixer_attach(app_data->mixer, card);
-//     if (err < 0) {
-//         snd_mixer_close(app_data->mixer);
-//         app_data->mixer = NULL;
-//         return -3;
-//     }
-//
-//     err = snd_mixer_selem_register(app_data->mixer, NULL, NULL);
-//     if (err < 0) {
-//         snd_mixer_close(app_data->mixer);
-//         app_data->mixer = NULL;
-//         return -4;
-//     }
-//
-//     err = snd_mixer_load(app_data->mixer);
-//     if (err < 0) {
-//         snd_mixer_close(app_data->mixer);
-//         app_data->mixer = NULL;
-//         return -5;
-//     }
-//     return 0;
-// }
-//
-// static void connect_alsa_mixer_elems(bbf_app_data_t *app_data) {
-//     snd_mixer_elem_t* elem;
-//     for (elem = snd_mixer_first_elem (app_data->mixer); elem;
-//          elem = snd_mixer_elem_next (elem)) {
-//
-//         if (bbf_settings_find_and_set(&app_data->general_settings, elem))
-//             continue;
-//
-//         for (int i = 0 ; i < BBF_NOF_INPUTS ; ++i) {
-//             if (bbf_channel_find_and_set(&app_data->input_channels[i], elem))
-//                 continue;
-//             if (bbf_channel_find_and_set(&app_data->playback_channels[i], elem))
-//                 continue;
-//         }
-//     }
-// }
-//
-// static void reset_alsa_mixer_elems(bbf_app_data_t *app_data) {
-//     for (int i = 0 ; i < BBF_NOF_INPUTS ; ++i) {
-//         bbf_channel_reset(&app_data->input_channels[i]);
-//         bbf_channel_reset(&app_data->playback_channels[i]);
-//     }
-// }
+unsafe fn connect_alsa_mixer(app_data: &mut bbf_app_data_t) -> isize {
+    log::debug!("Connect ALSA mixer");
+    let mut err;
+    let mut card = None;
+    let mut info: *mut snd_ctl_card_info_t = ptr::null_mut();
+    snd_ctl_card_info_malloc(&mut info);
+    let mut number = -1;
+    while card.is_none() {
+        err = snd_card_next(&mut number);
+        if err < 0 || number < 0 {
+            break;
+        }
+        let mut ctl: *mut snd_ctl_t = ptr::null_mut();
+        let buf = CString::new(format!("hw:{number}")).unwrap();
+        log::debug!("Try to open sound card {buf:?}");
+        err = snd_ctl_open(&mut ctl, buf.as_ptr(), 0);
+        if err < 0 {
+            log::warn!("Unable to open {buf:?}");
+            continue;
+        }
+        err = snd_ctl_card_info(ctl, info);
+        snd_ctl_close(ctl);
+        if err < 0 {
+            continue;
+        }
+        let card_name_ptr = snd_ctl_card_info_get_name(info);
+        if card_name_ptr.is_null() {
+            continue;
+        }
+        let card_name_str = CStr::from_ptr(card_name_ptr).to_str().unwrap();
+        log::debug!("Card name is: {card_name_str:?}");
+
+        if card_name_str.contains("Babyface Pro") {
+            log::info!("Found {card_name_str:?}");
+            card = Some(buf);
+        }
+    }
+    log::debug!("Card is {card:?}");
+
+    let Some(card) = card else {
+        return -1;
+    };
+
+    log::debug!("Open ALSA mixer");
+    err = snd_mixer_open(&mut app_data.mixer, 0);
+    if err < 0 {
+        return -2;
+    }
+
+    log::debug!("Attach ALSA mixer");
+    err = snd_mixer_attach(app_data.mixer, card.as_ptr());
+    if err < 0 {
+        snd_mixer_close(app_data.mixer);
+        app_data.mixer = ptr::null_mut();
+        return -3;
+    }
+
+    err = snd_mixer_selem_register(app_data.mixer, ptr::null_mut(), ptr::null_mut());
+    if err < 0 {
+        snd_mixer_close(app_data.mixer);
+        app_data.mixer = ptr::null_mut();
+        return -4;
+    }
+
+    err = snd_mixer_load(app_data.mixer);
+    if err < 0 {
+        snd_mixer_close(app_data.mixer);
+        app_data.mixer = ptr::null_mut();
+        return -5;
+    }
+    0
+}
+
+unsafe fn connect_alsa_mixer_elems(app_data: &mut bbf_app_data_t) {
+    let mut elem = snd_mixer_first_elem(app_data.mixer);
+
+    while !elem.is_null() {
+        if bbf_settings_find_and_set(&mut *app_data.general_settings, elem) {
+            elem = snd_mixer_elem_next(elem);
+            continue;
+        }
+
+        for i in 0..BBF_NOF_INPUTS {
+            if bbf_channel_find_and_set(app_data.input_channels[i], elem)
+                || bbf_channel_find_and_set(app_data.playback_channels[i], elem)
+            {
+                break;
+            }
+        }
+
+        elem = snd_mixer_elem_next(elem);
+    }
+}
+
+unsafe fn reset_alsa_mixer_elems(app_data: &mut bbf_app_data_t) {
+    for i in 0..BBF_NOF_INPUTS {
+        bbf_channel_reset(app_data.input_channels[i]);
+        bbf_channel_reset(app_data.playback_channels[i]);
+    }
+}
 
 unsafe extern "C" fn on_output_changed(combo: *mut GtkComboBox, user_data: gpointer) {
-    let _app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
-    let _entry_id = gtk_combo_box_get_active(combo);
-    for _i in 0..BBF_NOF_INPUTS {
-        // bbf_channel_set_output(&app_data->input_channels[i], entry_id);
-        // bbf_channel_set_output(&app_data->playback_channels[i], entry_id);
+    let app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
+    let entry_id = gtk_combo_box_get_active(combo) as usize;
+    for i in 0..BBF_NOF_INPUTS {
+        bbf_channel_set_output(app_data.input_channels[i], entry_id);
+        bbf_channel_set_output(app_data.playback_channels[i], entry_id);
     }
 }
 
@@ -188,22 +206,24 @@ unsafe extern "C" fn on_timeout(user_data: gpointer) -> gint {
     let app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
 
     if app_data.mixer.is_null() {
-        // int r = connect_alsa_mixer(app_data);
-        // if (r == 0) {
-        //     printf("Connected.\n");
-        //     connect_alsa_mixer_elems(app_data);
-        // }
+        let r = connect_alsa_mixer(app_data);
+        if r == 0 {
+            println!("Connected.");
+            connect_alsa_mixer_elems(app_data);
+        } else {
+            log::warn!("Unable to connect ALSA mixer: {r}");
+        }
     } else {
-        // int r = snd_mixer_handle_events(app_data->mixer);
-        // if (r < 0) {
-        //     snd_mixer_close(app_data->mixer);
-        //     app_data->mixer = NULL;
-        //     printf("disonnected.\n");
-        //     reset_alsa_mixer_elems(app_data);
-        // }
+        let r = snd_mixer_handle_events(app_data.mixer);
+        if r < 0 {
+            snd_mixer_close(app_data.mixer);
+            app_data.mixer = ptr::null_mut();
+            println!("disonnected.");
+            reset_alsa_mixer_elems(app_data);
+        }
     }
 
-    return 1;
+    1
 }
 
 unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
