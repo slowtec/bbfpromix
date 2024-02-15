@@ -26,12 +26,12 @@ const G_APPLICATION_FLAGS_NONE: u32 = 0;
 
 const BBF_NOF_INPUTS: usize = 12;
 const BBF_NOF_OUTPUTS: usize = 6;
-// #define BBF_VOL_MAX 65536
-// #define BBF_VOL_MIN 0
-// #define BBF_VOL_SLIDER_MAX 120
-// #define BBF_VOL_SLIDER_MIN 0
-// #define BBF_VOL_SLIDER_ZERO_DB 100
-// #define BBF_VOL_ZERO_DB (BBF_VOL_MAX/2.f)
+const BBF_VOL_MAX: usize = 65536;
+const BBF_VOL_MIN: usize = 0;
+const BBF_VOL_SLIDER_MAX: f64 = 120.0;
+const BBF_VOL_SLIDER_MIN: f64 = 0.0;
+const BBF_VOL_SLIDER_ZERO_DB: f64 = 100.0;
+const BBF_VOL_ZERO_DB: f64 = BBF_VOL_MAX as f64 / 2.0;
 
 const TRUE: i32 = 1;
 
@@ -75,8 +75,11 @@ impl bbf_app_data_t {
             playback_channels[i] = channel_ptr;
         }
 
+        let layout = Layout::new::<bbf_settings_t>();
+        let general_settings_ptr = unsafe { alloc(layout) as *mut bbf_settings_t };
+        let general_settings = general_settings_ptr;
+
         let mixer = ptr::null_mut();
-        let general_settings = ptr::null_mut();
 
         Self {
             mixer,
@@ -172,13 +175,13 @@ impl bbf_app_data_t {
 //     }
 // }
 
-fn on_output_changed(_combo: GtkComboBox, _user_data: gpointer) {
-    // bbf_app_data_t *app_data = (bbf_app_data_t*)user_data;
-    // gint entry_id = gtk_combo_box_get_active(combo);
-    // for (int i = 0 ; i < BBF_NOF_INPUTS ; ++i) {
-    //     bbf_channel_set_output(&app_data->input_channels[i], entry_id);
-    //     bbf_channel_set_output(&app_data->playback_channels[i], entry_id);
-    // }
+unsafe extern "C" fn on_output_changed(combo: *mut GtkComboBox, user_data: gpointer) {
+    let _app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
+    let _entry_id = gtk_combo_box_get_active(combo);
+    for _i in 0..BBF_NOF_INPUTS {
+        // bbf_channel_set_output(&app_data->input_channels[i], entry_id);
+        // bbf_channel_set_output(&app_data->playback_channels[i], entry_id);
+    }
 }
 
 unsafe extern "C" fn on_timeout(user_data: gpointer) -> gint {

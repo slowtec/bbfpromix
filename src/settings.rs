@@ -1,4 +1,11 @@
+use std::{
+    ffi::{CStr, CString},
+    ptr,
+};
+
 use gtk_sys::*;
+
+use crate::*;
 
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
@@ -11,62 +18,83 @@ pub struct bbf_settings_t {
     // snd_mixer_elem_t *spdif;
     // snd_mixer_elem_t *spdif_pro;
     // snd_mixer_elem_t *spdif_emph;
-    // bool no_signals;
+    no_signals: bool,
 }
 
-// static void on_bt_toggled_spdif(GtkWidget *button, gpointer *user_data) {
-//     bbf_settings_t *gs = (bbf_settings_t*)user_data;
-//
-//     if (gs->no_signals)
-//         return;
-//
-//     gboolean v = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
-//     gs->no_signals = true;
-//     snd_mixer_selem_set_playback_switch(gs->spdif, 0, v ? 1 : 0);
-//     gs->no_signals = false;
-//
-// }
-//
-// static void on_bt_toggled_spdif_emph(GtkWidget *button, gpointer *user_data) {
-//     bbf_settings_t *gs = (bbf_settings_t*)user_data;
-//
-//     if (gs->no_signals)
-//         return;
-//
-//     gboolean v = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
-//     gs->no_signals = true;
-//     snd_mixer_selem_set_playback_switch(gs->spdif_emph, 0, v ? 1 : 0);
-//     gs->no_signals = false;
-//
-// }
-//
-// static void on_bt_toggled_spdif_pro(GtkWidget *button, gpointer *user_data) {
-//     bbf_settings_t *gs = (bbf_settings_t*)user_data;
-//
-//     if (gs->no_signals)
-//         return;
-//
-//     gboolean v = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
-//     gs->no_signals = true;
-//     snd_mixer_selem_set_playback_switch(gs->spdif_pro, 0, v ? 1 : 0);
-//     gs->no_signals = false;
-//
-// }
-//
-// static void on_clock_changed(GtkComboBox* combo, gpointer user_data) {
-//     bbf_settings_t *gs = (bbf_settings_t*)user_data;
-//     if (gs->no_signals || !gs->clock)
-//         return;
-//
-//     gint active = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
-//     if (active < 0 || active > 1)
-//         return;
-//
-//     gs->no_signals = true;
-//     snd_mixer_selem_set_enum_item(gs->clock, 0, active);
-//     gs->no_signals = false;
-// }
-//
+impl bbf_settings_t {
+    fn new() -> Self {
+        Self {
+            cb_clock: ptr::null_mut(),
+            bt_spdif: ptr::null_mut(),
+            bt_spdif_pro: ptr::null_mut(),
+            bt_spdif_emph: ptr::null_mut(),
+            no_signals: false,
+        }
+    }
+}
+
+unsafe extern "C" fn on_bt_toggled_spdif(_button: *mut GtkWidget, user_data: gpointer) {
+    let gs: &mut bbf_settings_t = &mut *(user_data as *mut bbf_settings_t);
+
+    log::debug!("Button SPDIF toggled: {gs:?}");
+
+    if gs.no_signals {
+        return;
+    }
+
+    // gboolean v = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
+    // gs->no_signals = true;
+    // snd_mixer_selem_set_playback_switch(gs->spdif, 0, v ? 1 : 0);
+    // gs->no_signals = false;
+}
+
+unsafe extern "C" fn on_bt_toggled_spdif_emph(_button: *mut GtkWidget, user_data: gpointer) {
+    let gs: &mut bbf_settings_t = &mut *(user_data as *mut bbf_settings_t);
+
+    log::debug!("Button SPDIF Emph. toggled: {gs:?}");
+
+    if gs.no_signals {
+        return;
+    }
+
+    // gboolean v = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
+    // gs->no_signals = true;
+    // snd_mixer_selem_set_playback_switch(gs->spdif_emph, 0, v ? 1 : 0);
+    // gs->no_signals = false;
+}
+
+unsafe extern "C" fn on_bt_toggled_spdif_pro(_button: *mut GtkWidget, user_data: gpointer) {
+    let gs: &mut bbf_settings_t = &mut *(user_data as *mut bbf_settings_t);
+
+    log::debug!("Button SPDIF Pro toggled: {gs:?}");
+
+    if gs.no_signals {
+        return;
+    }
+
+    // gboolean v = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(button));
+    // gs->no_signals = true;
+    // snd_mixer_selem_set_playback_switch(gs->spdif_pro, 0, v ? 1 : 0);
+    // gs->no_signals = false;
+}
+
+unsafe extern "C" fn on_clock_changed(_comobo: *mut GtkComboBox, user_data: gpointer) {
+    let gs: &mut bbf_settings_t = &mut *(user_data as *mut bbf_settings_t);
+
+    log::debug!("Clock changed: {gs:?}");
+
+    // if (gs->no_signals || !gs->clock)
+    //     return;
+    //
+    // gint active = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+    // if (active < 0 || active > 1)
+    //     return;
+    //
+    // gs->no_signals = true;
+    // snd_mixer_selem_set_enum_item(gs->clock, 0, active);
+    // gs->no_signals = false;
+}
+
 // static void update_settings(bbf_settings_t* gs) {
 //     gs->no_signals = true;
 //
@@ -197,30 +225,60 @@ pub struct bbf_settings_t {
 //     return false;
 // }
 
-pub fn bbf_settings_init(_gs: &mut bbf_settings_t) {
-    // gs->clock = NULL;
-    // gs->spdif = NULL;
-    // gs->spdif_emph = NULL;
-    // gs->spdif_pro = NULL;
-    // gs->no_signals = false;
-    // gs->cb_clock = gtk_combo_box_text_new();
-    // gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(gs->cb_clock), NULL,
-    //                           "AutoSync");
-    // gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(gs->cb_clock), NULL,
-    //                           "Internal");
-    // g_signal_connect(gs->cb_clock, "changed",
-    //                  *G_CALLBACK(on_clock_changed),
-    //                  gs);
-    //
-    // gs->bt_spdif = gtk_toggle_button_new_with_label("SPDIF");
-    // g_signal_connect(gs->bt_spdif, "toggled",
-    //                      *G_CALLBACK(on_bt_toggled_spdif), gs);
-    //
-    // gs->bt_spdif_emph = gtk_toggle_button_new_with_label("SPDIF Emph.");
-    // g_signal_connect(gs->bt_spdif_emph, "toggled",
-    //                      *G_CALLBACK(on_bt_toggled_spdif_emph), gs);
-    //
-    // gs->bt_spdif_pro = gtk_toggle_button_new_with_label("SPDIF Pro");
-    // g_signal_connect(gs->bt_spdif_pro, "toggled",
-    //                      *G_CALLBACK(on_bt_toggled_spdif_pro), gs);
+pub unsafe fn bbf_settings_init(gs: &mut bbf_settings_t) {
+    *gs = bbf_settings_t::new();
+    log::debug!("Initialize settings: {gs:?}");
+
+    gs.cb_clock = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(
+        gs.cb_clock as *mut GtkComboBoxText,
+        ptr::null(),
+        CStr::from_bytes_with_nul_unchecked(b"AutoSync\0").as_ptr(),
+    );
+    gtk_combo_box_text_append(
+        gs.cb_clock as *mut GtkComboBoxText,
+        ptr::null(),
+        CStr::from_bytes_with_nul_unchecked(b"Internal\0").as_ptr(),
+    );
+    g_signal_connect_data(
+        gs.cb_clock as *mut _,
+        CStr::from_bytes_with_nul_unchecked(b"changed\0").as_ptr(),
+        Some(mem::transmute(on_clock_changed as *const ())),
+        gs as *mut _ as *mut c_void,
+        None,
+        0,
+    );
+
+    let label_text = CString::new("SPDIF").unwrap();
+    gs.bt_spdif = gtk_toggle_button_new_with_label(label_text.as_ptr());
+    g_signal_connect_data(
+        gs.bt_spdif as *mut _,
+        CStr::from_bytes_with_nul_unchecked(b"toggled\0").as_ptr(),
+        Some(mem::transmute(on_bt_toggled_spdif as *const ())),
+        gs as *mut _ as *mut c_void,
+        None,
+        0,
+    );
+
+    let label_text = CString::new("SPDIF Emph.").unwrap();
+    gs.bt_spdif_emph = gtk_toggle_button_new_with_label(label_text.as_ptr());
+    g_signal_connect_data(
+        gs.bt_spdif_emph as *mut _,
+        CStr::from_bytes_with_nul_unchecked(b"toggled\0").as_ptr(),
+        Some(mem::transmute(on_bt_toggled_spdif_emph as *const ())),
+        gs as *mut _ as *mut c_void,
+        None,
+        0,
+    );
+
+    let label_text = CString::new("SPDIF Pro").unwrap();
+    gs.bt_spdif_pro = gtk_toggle_button_new_with_label(label_text.as_ptr());
+    g_signal_connect_data(
+        gs.bt_spdif_pro as *mut _,
+        CStr::from_bytes_with_nul_unchecked(b"toggled\0").as_ptr(),
+        Some(mem::transmute(on_bt_toggled_spdif_pro as *const ())),
+        gs as *mut _ as *mut c_void,
+        None,
+        0,
+    );
 }
