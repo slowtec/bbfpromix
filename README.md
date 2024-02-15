@@ -13,7 +13,7 @@ This is a [Rust](https://www.rust-lang.org/) port of the application
 ## Install
 
 ```
-cargo install --locked --git https://github.com/slowtec/bbfpromix-rs.git
+cargo install --locked --git https://github.com/slowtec/bbfpromix.git
 ```
 
 ## License

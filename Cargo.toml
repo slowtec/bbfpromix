@@ -5,6 +5,9 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 rustc-version = "1.76"
 authors = ["Markus Kohlhase <markus.kohlhase@slowtec.de>"]
+readme = "README.md"
+homepage = "https://github.com/slowtec/bbfpromix"
+repository = "https://github.com/slowtec/bbfpromix"
 
 [dependencies]
 alsa-sys = "0.3.1"
