@@ -3,6 +3,9 @@
 This is a [Rust](https://www.rust-lang.org/) port of the application
 [bbfpromix](https://github.com/MrBollie/bbfpromix).
 
+[![Crates.io](https://img.shields.io/crates/v/bbfpromix.svg)](https://crates.io/crates/bbfpromix)
+[![License](https://img.shields.io/crates/l/bbfpromix)](https://github.com/slowtec/bbfpromix/blob/main/LICENSE)
+
 ## Requirements
 
 - Linux
