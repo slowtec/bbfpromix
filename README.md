@@ -21,7 +21,7 @@ cargo install --locked --git https://github.com/slowtec/bbfpromix.git
 
 ## License
 
-Copyright (c) 2024 [slowtec GmbH](https://slowtec.de)\
+Copyright (c) 2024 - 2025 [slowtec GmbH](https://slowtec.de)\
 Copyright (c) 2020 Thomas Ebeling
 
 This project is licensed unter the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.html).

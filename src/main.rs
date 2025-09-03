@@ -16,16 +16,11 @@ mod settings;
 
 use self::{channel::*, settings::*};
 
-#[allow(non_camel_case_types)]
-type gpointer = *mut c_void;
-
-#[allow(non_camel_case_types)]
-type gint = i32;
-
 const G_APPLICATION_FLAGS_NONE: u32 = 0;
 
-const BBF_NOF_INPUTS: usize = 12;
-const BBF_NOF_OUTPUTS: usize = 6;
+const NUMBER_OF_INPUTS: usize = 12;
+const NUMBER_OF_OUTPUTS: usize = 6;
+
 const BBF_VOL_MAX: usize = 65536;
 const BBF_VOL_MIN: usize = 0;
 const BBF_VOL_SLIDER_MAX: f64 = 120.0;
@@ -38,11 +33,11 @@ const SND_CTL_EVENT_MASK_VALUE: u32 = 1 << 0;
 
 const TRUE: i32 = 1;
 
-const BBF_INPUTS: [&str; BBF_NOF_INPUTS] = [
+const INPUTS: [&str; NUMBER_OF_INPUTS] = [
     "AN1", "AN2", "IN3", "IN4", "AS1", "AS2", "ADAT3", "ADAT4", "ADAT5", "ADAT6", "ADAT7", "ADAT8",
 ];
 
-const BBF_OUTPUTS: [[&str; 2]; BBF_NOF_OUTPUTS] = [
+const OUTPUTS: [[&str; 2]; NUMBER_OF_OUTPUTS] = [
     ["AN1", "AN2"],
     ["PH3", "PH4"],
     ["AS1", "AS2"],
@@ -52,62 +47,61 @@ const BBF_OUTPUTS: [[&str; 2]; BBF_NOF_OUTPUTS] = [
 ];
 
 #[derive(Debug)]
-#[allow(non_camel_case_types)]
-struct bbf_app_data_t {
-    input_channels: [*mut bbf_channel_t; BBF_NOF_INPUTS],
-    playback_channels: [*mut bbf_channel_t; BBF_NOF_INPUTS],
-    general_settings: *mut bbf_settings_t,
+struct AppData {
+    input_channels: [*mut Channel; NUMBER_OF_INPUTS],
+    playback_channels: [*mut Channel; NUMBER_OF_INPUTS],
+    general_settings: *mut Settings,
     mixer: *mut snd_mixer_t,
 }
 
-impl bbf_app_data_t {
+impl AppData {
     fn new() -> Self {
-        let mut input_channels = [ptr::null_mut(); BBF_NOF_INPUTS];
-        let mut playback_channels = [ptr::null_mut(); BBF_NOF_INPUTS];
+        let mut input_channels = [ptr::null_mut(); NUMBER_OF_INPUTS];
+        let mut playback_channels = [ptr::null_mut(); NUMBER_OF_INPUTS];
 
-        for i in 0..BBF_NOF_INPUTS {
-            let layout = Layout::new::<bbf_channel_t>();
-            let channel_ptr = unsafe { alloc(layout) as *mut bbf_channel_t };
-            input_channels[i] = channel_ptr;
+        for input_channel in input_channels.iter_mut().take(NUMBER_OF_INPUTS) {
+            let layout = Layout::new::<Channel>();
+            let channel_ptr = unsafe { alloc(layout).cast::<Channel>() };
+            *input_channel = channel_ptr;
         }
 
-        for i in 0..BBF_NOF_INPUTS {
-            let layout = Layout::new::<bbf_channel_t>();
-            let channel_ptr = unsafe { alloc(layout) as *mut bbf_channel_t };
-            playback_channels[i] = channel_ptr;
+        for playback_channel in playback_channels.iter_mut().take(NUMBER_OF_INPUTS) {
+            let layout = Layout::new::<Channel>();
+            let channel_ptr = unsafe { alloc(layout).cast::<Channel>() };
+            *playback_channel = channel_ptr;
         }
 
-        let layout = Layout::new::<bbf_settings_t>();
-        let general_settings_ptr = unsafe { alloc(layout) as *mut bbf_settings_t };
+        let layout = Layout::new::<Settings>();
+        let general_settings_ptr = unsafe { alloc(layout).cast::<Settings>() };
         let general_settings = general_settings_ptr;
 
         let mixer = ptr::null_mut();
 
         Self {
-            mixer,
             input_channels,
             playback_channels,
             general_settings,
+            mixer,
         }
     }
 }
 
-unsafe fn connect_alsa_mixer(app_data: &mut bbf_app_data_t) -> isize {
+unsafe fn connect_alsa_mixer(app_data: &mut AppData) -> isize {
     log::debug!("Connect ALSA mixer");
     let mut err;
     let mut card = None;
     let mut info: *mut snd_ctl_card_info_t = ptr::null_mut();
-    snd_ctl_card_info_malloc(&mut info);
+    snd_ctl_card_info_malloc(&raw mut info);
     let mut number = -1;
     while card.is_none() {
-        err = snd_card_next(&mut number);
+        err = snd_card_next(&raw mut number);
         if err < 0 || number < 0 {
             break;
         }
         let mut ctl: *mut snd_ctl_t = ptr::null_mut();
         let buf = CString::new(format!("hw:{number}")).unwrap();
         log::debug!("Try to open sound card {buf:?}");
-        err = snd_ctl_open(&mut ctl, buf.as_ptr(), 0);
+        err = snd_ctl_open(&raw mut ctl, buf.as_ptr(), 0);
         if err < 0 {
             log::warn!("Unable to open {buf:?}");
             continue;
@@ -136,7 +130,7 @@ unsafe fn connect_alsa_mixer(app_data: &mut bbf_app_data_t) -> isize {
     };
 
     log::debug!("Open ALSA mixer");
-    err = snd_mixer_open(&mut app_data.mixer, 0);
+    err = snd_mixer_open(&raw mut app_data.mixer, 0);
     if err < 0 {
         return -2;
     }
@@ -165,18 +159,18 @@ unsafe fn connect_alsa_mixer(app_data: &mut bbf_app_data_t) -> isize {
     0
 }
 
-unsafe fn connect_alsa_mixer_elems(app_data: &mut bbf_app_data_t) {
+unsafe fn connect_alsa_mixer_elems(app_data: &mut AppData) {
     let mut elem = snd_mixer_first_elem(app_data.mixer);
 
     while !elem.is_null() {
-        if bbf_settings_find_and_set(&mut *app_data.general_settings, elem) {
+        if settings_find_and_set(&mut *app_data.general_settings, elem) {
             elem = snd_mixer_elem_next(elem);
             continue;
         }
 
-        for i in 0..BBF_NOF_INPUTS {
-            if bbf_channel_find_and_set(app_data.input_channels[i], elem)
-                || bbf_channel_find_and_set(app_data.playback_channels[i], elem)
+        for i in 0..NUMBER_OF_INPUTS {
+            if channel_find_and_set(app_data.input_channels[i], elem)
+                || channel_find_and_set(app_data.playback_channels[i], elem)
             {
                 break;
             }
@@ -186,24 +180,24 @@ unsafe fn connect_alsa_mixer_elems(app_data: &mut bbf_app_data_t) {
     }
 }
 
-unsafe fn reset_alsa_mixer_elems(app_data: &mut bbf_app_data_t) {
-    for i in 0..BBF_NOF_INPUTS {
-        bbf_channel_reset(app_data.input_channels[i]);
-        bbf_channel_reset(app_data.playback_channels[i]);
+unsafe fn reset_alsa_mixer_elems(app_data: &mut AppData) {
+    for i in 0..NUMBER_OF_INPUTS {
+        channel_reset(app_data.input_channels[i]);
+        channel_reset(app_data.playback_channels[i]);
     }
 }
 
 unsafe extern "C" fn on_output_changed(combo: *mut GtkComboBox, user_data: gpointer) {
-    let app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
+    let app_data: &mut AppData = &mut *user_data.cast::<AppData>();
     let entry_id = gtk_combo_box_get_active(combo) as usize;
-    for i in 0..BBF_NOF_INPUTS {
-        bbf_channel_set_output(app_data.input_channels[i], entry_id);
-        bbf_channel_set_output(app_data.playback_channels[i], entry_id);
+    for i in 0..NUMBER_OF_INPUTS {
+        channel_set_output(app_data.input_channels[i], entry_id);
+        channel_set_output(app_data.playback_channels[i], entry_id);
     }
 }
 
 unsafe extern "C" fn on_timeout(user_data: gpointer) -> gint {
-    let app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
+    let app_data: &mut AppData = &mut *user_data.cast::<AppData>();
 
     if app_data.mixer.is_null() {
         let r = connect_alsa_mixer(app_data);
@@ -228,41 +222,41 @@ unsafe extern "C" fn on_timeout(user_data: gpointer) -> gint {
 
 unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
     log::debug!("Activate GTK application");
-    let app_data: &mut bbf_app_data_t = &mut *(user_data as *mut bbf_app_data_t);
+    let app_data: &mut AppData = &mut *user_data.cast::<AppData>();
 
     // Initialize the main window
     let main_window = gtk_application_window_new(app);
-    let title = CString::new("Babyface Pro Mixer").unwrap();
-    gtk_window_set_title(main_window as *mut GtkWindow, title.as_ptr());
-    gtk_window_set_default_size(main_window as *mut GtkWindow, 800, 600);
+    let title = c"Babyface Pro Mixer";
+    gtk_window_set_title(main_window.cast::<GtkWindow>(), title.as_ptr());
+    gtk_window_set_default_size(main_window.cast::<GtkWindow>(), 800, 600);
 
     // add the main grid
-    let main_grid = gtk_grid_new() as *mut GtkGrid;
+    let main_grid = gtk_grid_new().cast::<GtkGrid>();
     gtk_grid_set_column_homogeneous(main_grid, 1);
 
     // Inputs
-    let label_text = CString::new("Hardware Inputs").unwrap();
+    let label_text = c"Hardware Inputs";
     let label_inputs = gtk_label_new(label_text.as_ptr());
     gtk_widget_set_hexpand(label_inputs, TRUE);
     gtk_grid_attach(main_grid, label_inputs, 0, 0, 24, 1);
 
-    for i in 0..BBF_NOF_INPUTS {
-        let ic: &mut bbf_channel_t = &mut *app_data.input_channels[i];
+    for (i, input) in INPUTS.iter().enumerate().take(NUMBER_OF_INPUTS) {
+        let ic: &mut Channel = &mut *app_data.input_channels[i];
 
         if i < 2 {
             // Mic channel
-            bbf_channel_init(ic, bbf_channel_type::MIC, BBF_INPUTS[i]);
+            channel_init(ic, ChannelType::Mic, input);
             gtk_grid_attach(main_grid, ic.lbl_name, i as i32 * 2, 1, 2, 1);
-            gtk_grid_attach(main_grid, ic.bt_PAD, i as i32 * 2, 2, 1, 1);
-            gtk_grid_attach(main_grid, ic.bt_48V, i as i32 * 2 + 1, 2, 1, 1);
+            gtk_grid_attach(main_grid, ic.bt_pad, i as i32 * 2, 2, 1, 1);
+            gtk_grid_attach(main_grid, ic.bt_48v, i as i32 * 2 + 1, 2, 1, 1);
         } else if i > 1 && i < 4 {
             // Instrument channel
-            bbf_channel_init(ic, bbf_channel_type::INSTR, BBF_INPUTS[i]);
+            channel_init(ic, ChannelType::Instr, input);
             gtk_grid_attach(main_grid, ic.lbl_name, i as i32 * 2, 1, 2, 1);
-            gtk_grid_attach(main_grid, ic.cb_Sens, i as i32 * 2, 2, 2, 1);
+            gtk_grid_attach(main_grid, ic.cb_sens, i as i32 * 2, 2, 2, 1);
         } else {
             // Line channel
-            bbf_channel_init(ic, bbf_channel_type::LINE, BBF_INPUTS[i]);
+            channel_init(ic, ChannelType::Line, input);
             gtk_grid_attach(main_grid, ic.lbl_name, i as i32 * 2, 1, 2, 1);
         }
         gtk_grid_attach(main_grid, ic.sc_pan, i as i32 * 2, 3, 2, 1);
@@ -274,23 +268,24 @@ unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
     gtk_grid_attach(main_grid, separator, 0, 6, 24, 1);
 
     // Playbacks
-    let label_text = CString::new("Software Playback").unwrap();
+    let label_text = c"Software Playback";
     let label_playbacks = gtk_label_new(label_text.as_ptr());
     gtk_widget_set_hexpand(label_playbacks, TRUE);
     gtk_grid_attach(main_grid, label_playbacks, 0, 7, 24, 1);
 
     let mut pc_count = 0;
-    for i in 0..BBF_NOF_OUTPUTS {
-        let pc: &mut bbf_channel_t = &mut *app_data.playback_channels[pc_count];
-        bbf_channel_init(pc, bbf_channel_type::PCM, BBF_OUTPUTS[i][0]);
+
+    for output in OUTPUTS.iter().take(NUMBER_OF_OUTPUTS) {
+        let pc: &mut Channel = &mut *app_data.playback_channels[pc_count];
+        channel_init(pc, ChannelType::Pcm, output[0]);
         gtk_grid_attach(main_grid, pc.lbl_name, pc_count as i32 * 2, 8, 2, 1);
         gtk_grid_attach(main_grid, pc.sc_pan, pc_count as i32 * 2, 9, 2, 1);
         gtk_widget_set_vexpand(pc.sc_vol, TRUE);
         gtk_grid_attach(main_grid, pc.sc_vol, pc_count as i32 * 2, 10, 2, 2);
         pc_count += 1;
 
-        let pc: &mut bbf_channel_t = &mut *app_data.playback_channels[pc_count];
-        bbf_channel_init(pc, bbf_channel_type::PCM, BBF_OUTPUTS[i][1]);
+        let pc: &mut Channel = &mut *app_data.playback_channels[pc_count];
+        channel_init(pc, ChannelType::Pcm, output[1]);
         gtk_grid_attach(main_grid, pc.lbl_name, pc_count as i32 * 2, 8, 2, 1);
         gtk_grid_attach(main_grid, pc.sc_pan, pc_count as i32 * 2, 9, 2, 1);
         gtk_widget_set_vexpand(pc.sc_vol, TRUE);
@@ -299,17 +294,23 @@ unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
     }
 
     // Output selector
-    let label_text = CString::new("Hardware Output:").unwrap();
+    let label_text = c"Hardware Output:";
     let label_output = gtk_label_new(label_text.as_ptr());
     gtk_grid_attach(main_grid, label_output, 0, 12, 2, 1);
     let cb_output = gtk_combo_box_text_new();
-    for i in 0..BBF_NOF_OUTPUTS {
-        let txt = CString::new(format!("{}/{}", BBF_OUTPUTS[i][0], BBF_OUTPUTS[i][1])).unwrap();
-        gtk_combo_box_text_append(cb_output as *mut GtkComboBoxText, ptr::null(), txt.as_ptr());
+
+    for output in OUTPUTS.iter().take(NUMBER_OF_OUTPUTS) {
+        let txt = CString::new(format!("{}/{}", output[0], output[1])).unwrap();
+        gtk_combo_box_text_append(
+            cb_output.cast::<GtkComboBoxText>(),
+            ptr::null(),
+            txt.as_ptr(),
+        );
     }
+
     g_signal_connect_data(
-        cb_output as *mut _,
-        CStr::from_bytes_with_nul_unchecked(b"changed\0").as_ptr(),
+        cb_output.cast(),
+        c"changed".as_ptr(),
         Some(mem::transmute(on_output_changed as *const ())),
         user_data,
         None,
@@ -318,10 +319,10 @@ unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
     gtk_grid_attach(main_grid, cb_output, 2, 12, 2, 1);
 
     // Settings
-    bbf_settings_init(&mut *app_data.general_settings);
+    settings_init(&mut *app_data.general_settings);
 
     // Clock
-    let label_text = CString::new("Clock Mode:").unwrap();
+    let label_text = c"Clock Mode:";
     let label_clock = gtk_label_new(label_text.as_ptr());
     gtk_grid_attach(main_grid, label_clock, 4, 12, 2, 1);
     gtk_grid_attach(
@@ -363,10 +364,10 @@ unsafe extern "C" fn activate(app: *mut GtkApplication, user_data: gpointer) {
         1,
     );
 
-    gtk_widget_set_hexpand(main_grid as *mut GtkWidget, TRUE);
+    gtk_widget_set_hexpand(main_grid.cast::<GtkWidget>(), TRUE);
     gtk_container_add(
-        main_window as *mut GtkContainer,
-        main_grid as *mut GtkWidget,
+        main_window.cast::<GtkContainer>(),
+        main_grid.cast::<GtkWidget>(),
     );
     gtk_widget_show_all(main_window);
     g_timeout_add(10, Some(on_timeout), user_data);
@@ -378,7 +379,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     log::debug!("Start bbfpromix");
 
-    let mut app_data = bbf_app_data_t::new();
+    let mut app_data = AppData::new();
 
     log::debug!("Create GTK application");
     let app_id = CString::new(APP_ID)?;
@@ -387,10 +388,10 @@ fn main() -> anyhow::Result<()> {
 
     unsafe {
         g_signal_connect_data(
-            app as *mut _,
-            CStr::from_bytes_with_nul_unchecked(b"activate\0").as_ptr(),
+            app.cast(),
+            c"activate".as_ptr(),
             Some(mem::transmute(activate as *const ())),
-            &mut app_data as *mut _ as *mut c_void,
+            (&raw mut app_data).cast::<c_void>(),
             None,
             0,
         )
@@ -404,7 +405,7 @@ fn main() -> anyhow::Result<()> {
     log::debug!("Run GTK application");
     let status = unsafe {
         g_application_run(
-            app as *mut GApplication,
+            app.cast::<GApplication>(),
             argc,
             args.as_ptr() as *mut *mut c_char,
         )
@@ -414,7 +415,7 @@ fn main() -> anyhow::Result<()> {
         unsafe { snd_mixer_close(app_data.mixer) };
     }
 
-    unsafe { g_object_unref(app as *mut GObject) };
+    unsafe { g_object_unref(app.cast::<GObject>()) };
 
     std::process::exit(status);
 }

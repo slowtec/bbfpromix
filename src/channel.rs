@@ -9,61 +9,56 @@ use gtk_sys::*;
 use crate::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[allow(non_camel_case_types)]
-pub enum bbf_channel_type {
-    MIC = 0,
-    INSTR,
-    LINE,
-    PCM,
+pub enum ChannelType {
+    Mic = 0,
+    Instr,
+    Line,
+    Pcm,
 }
 
 #[derive(Debug)]
-#[allow(non_camel_case_types)]
-pub struct bbf_output_t {
-    pub r#type: *mut bbf_channel_type,
-    pub name_l: &'static str,
-    pub name_r: &'static str,
-    pub elem_l: *mut snd_mixer_elem_t,
-    pub elem_r: *mut snd_mixer_elem_t,
+pub struct Output {
+    name_l: &'static str,
+    name_r: &'static str,
+    elem_l: *mut snd_mixer_elem_t,
+    elem_r: *mut snd_mixer_elem_t,
 }
 
 #[derive(Debug)]
-#[allow(non_camel_case_types)]
-#[allow(non_snake_case)]
-pub struct bbf_channel_t {
-    pub name: &'static str,
-    pub outputs: [*mut bbf_output_t; BBF_NOF_OUTPUTS],
-    pub cur_output: *mut bbf_output_t,
-    pub bt_48V: *mut GtkWidget,
-    pub bt_PAD: *mut GtkWidget,
-    pub cb_Sens: *mut GtkWidget,
+pub struct Channel {
+    name: &'static str,
+    outputs: [*mut Output; NUMBER_OF_OUTPUTS],
+    cur_output: *mut Output,
+    pub bt_48v: *mut GtkWidget,
+    pub bt_pad: *mut GtkWidget,
+    pub cb_sens: *mut GtkWidget,
     pub sc_vol: *mut GtkWidget,
     pub sc_pan: *mut GtkWidget,
     pub lbl_name: *mut GtkWidget,
-    pub no_signals: bool,
-    pub r#type: bbf_channel_type,
-    pub phantom: *mut snd_mixer_elem_t,
-    pub pad: *mut snd_mixer_elem_t,
-    pub sens: *mut snd_mixer_elem_t,
+    no_signals: bool,
+    r#type: ChannelType,
+    phantom: *mut snd_mixer_elem_t,
+    pad: *mut snd_mixer_elem_t,
+    sens: *mut snd_mixer_elem_t,
 }
 
-impl bbf_channel_t {
-    pub fn new(name: &'static str, r#type: bbf_channel_type) -> Self {
-        let mut outputs = [ptr::null_mut(); BBF_NOF_OUTPUTS];
+impl Channel {
+    pub fn new(name: &'static str, r#type: ChannelType) -> Self {
+        let mut outputs = [ptr::null_mut(); NUMBER_OF_OUTPUTS];
 
-        for i in 0..BBF_NOF_OUTPUTS {
-            let layout = Layout::new::<bbf_output_t>();
-            let ptr = unsafe { alloc(layout) as *mut bbf_output_t };
-            outputs[i] = ptr;
+        for output in outputs.iter_mut().take(NUMBER_OF_OUTPUTS) {
+            let layout = Layout::new::<Output>();
+            let ptr = unsafe { alloc(layout).cast::<Output>() };
+            *output = ptr;
         }
 
         Self {
             name,
             outputs,
             cur_output: ptr::null_mut(),
-            bt_48V: ptr::null_mut(),
-            bt_PAD: ptr::null_mut(),
-            cb_Sens: ptr::null_mut(),
+            bt_48v: ptr::null_mut(),
+            bt_pad: ptr::null_mut(),
+            cb_sens: ptr::null_mut(),
             sc_vol: ptr::null_mut(),
             sc_pan: ptr::null_mut(),
             lbl_name: ptr::null_mut(),
@@ -77,51 +72,46 @@ impl bbf_channel_t {
 }
 
 unsafe extern "C" fn on_selem_changed(elem: *mut snd_mixer_elem_t, mask: u32) -> i32 {
-    let c: &mut bbf_channel_t =
-        &mut *(snd_mixer_elem_get_callback_private(elem) as *mut bbf_channel_t);
+    let c: &mut Channel = &mut *snd_mixer_elem_get_callback_private(elem).cast::<Channel>();
     if mask == SND_CTL_EVENT_MASK_REMOVE {
-        bbf_channel_reset(c);
+        channel_reset(c);
     } else if mask == SND_CTL_EVENT_MASK_VALUE {
         if c.no_signals {
             return 0;
         }
-        bbf_update_sliders(c);
+        update_sliders(c);
     }
     0
 }
 
-#[allow(non_snake_case)]
-unsafe extern "C" fn on_selem_changed_48V(elem: *mut snd_mixer_elem_t, mask: u32) -> i32 {
-    let c: &mut bbf_channel_t =
-        &mut *(snd_mixer_elem_get_callback_private(elem) as *mut bbf_channel_t);
+unsafe extern "C" fn on_selem_changed_48v(elem: *mut snd_mixer_elem_t, mask: u32) -> i32 {
+    let c: &mut Channel = &mut *snd_mixer_elem_get_callback_private(elem).cast::<Channel>();
     if mask == SND_CTL_EVENT_MASK_REMOVE {
         c.phantom = ptr::null_mut();
     } else if mask == SND_CTL_EVENT_MASK_VALUE {
         if c.no_signals {
             return 0;
         }
-        bbf_update_switches(c);
+        update_switches(c);
     }
     0
 }
 
 unsafe extern "C" fn on_selem_changed_pad(elem: *mut snd_mixer_elem_t, mask: u32) -> i32 {
-    let c: &mut bbf_channel_t =
-        &mut *(snd_mixer_elem_get_callback_private(elem) as *mut bbf_channel_t);
+    let c: &mut Channel = &mut *snd_mixer_elem_get_callback_private(elem).cast::<Channel>();
     if mask == SND_CTL_EVENT_MASK_REMOVE {
         c.pad = ptr::null_mut();
     } else if mask == SND_CTL_EVENT_MASK_VALUE {
         if c.no_signals {
             return 0;
         }
-        bbf_update_switches(c);
+        update_switches(c);
     }
     0
 }
 
 unsafe extern "C" fn on_selem_changed_sens(elem: *mut snd_mixer_elem_t, mask: u32) -> i32 {
-    let c: &mut bbf_channel_t =
-        &mut *(snd_mixer_elem_get_callback_private(elem) as *mut bbf_channel_t);
+    let c: &mut Channel = &mut *snd_mixer_elem_get_callback_private(elem).cast::<Channel>();
 
     if mask == SND_CTL_EVENT_MASK_REMOVE {
         c.sens = ptr::null_mut();
@@ -129,49 +119,47 @@ unsafe extern "C" fn on_selem_changed_sens(elem: *mut snd_mixer_elem_t, mask: u3
         if c.no_signals {
             return 0;
         }
-        bbf_update_switches(c);
+        update_switches(c);
     }
     0
 }
 
-#[allow(non_snake_case)]
-unsafe extern "C" fn on_bt_toggled_48V(button: *mut GtkWidget, user_data: gpointer) {
+unsafe extern "C" fn on_bt_toggled_48v(button: *mut GtkWidget, user_data: gpointer) {
     log::debug!("48V toggled");
-    let c: &mut bbf_channel_t = &mut *(user_data as *mut bbf_channel_t);
+    let c: &mut Channel = &mut *user_data.cast::<Channel>();
 
     if c.no_signals || c.phantom.is_null() {
         return;
     }
 
-    let v = gtk_toggle_button_get_active(button as *mut GtkToggleButton);
+    let v = gtk_toggle_button_get_active(button.cast::<GtkToggleButton>());
     c.no_signals = true;
-    snd_mixer_selem_set_playback_switch(c.phantom, 0, if v == 1 { 1 } else { 0 });
+    snd_mixer_selem_set_playback_switch(c.phantom, 0, i32::from(v == 1));
     c.no_signals = false;
 }
 
-#[allow(non_snake_case)]
-unsafe extern "C" fn on_bt_toggled_PAD(button: *mut GtkWidget, user_data: gpointer) {
+unsafe extern "C" fn on_bt_toggled_pad(button: *mut GtkWidget, user_data: gpointer) {
     log::debug!("PAD toggled");
-    let c: &mut bbf_channel_t = &mut *(user_data as *mut bbf_channel_t);
+    let c: &mut Channel = &mut *user_data.cast::<Channel>();
 
     if c.no_signals || c.pad.is_null() {
         return;
     }
 
-    let v = gtk_toggle_button_get_active(button as *mut GtkToggleButton);
+    let v = gtk_toggle_button_get_active(button.cast::<GtkToggleButton>());
     c.no_signals = true;
-    snd_mixer_selem_set_playback_switch(c.pad, 0, if v == 1 { 1 } else { 0 });
+    snd_mixer_selem_set_playback_switch(c.pad, 0, i32::from(v == 1));
     c.no_signals = false;
 }
 
 unsafe extern "C" fn on_cb_sens(combo: *mut GtkWidget, user_data: gpointer) {
-    let c: &mut bbf_channel_t = &mut *(user_data as *mut bbf_channel_t);
+    let c: &mut Channel = &mut *user_data.cast::<Channel>();
 
     if c.no_signals || c.sens.is_null() {
         return;
     }
 
-    let active = gtk_combo_box_get_active(combo as *mut GtkComboBox);
+    let active = gtk_combo_box_get_active(combo.cast::<GtkComboBox>());
     if !(0..=1).contains(&active) {
         return;
     }
@@ -182,7 +170,7 @@ unsafe extern "C" fn on_cb_sens(combo: *mut GtkWidget, user_data: gpointer) {
 }
 
 unsafe extern "C" fn on_slider_changed(_slider: *mut GtkWidget, user_data: gpointer) {
-    let c: &mut bbf_channel_t = &mut *(user_data as *mut bbf_channel_t);
+    let c: &mut Channel = &mut *user_data.cast::<Channel>();
 
     log::debug!("Slider changed {}", c.name);
 
@@ -194,8 +182,8 @@ unsafe extern "C" fn on_slider_changed(_slider: *mut GtkWidget, user_data: gpoin
         return;
     }
 
-    let mut pan = gtk_range_get_value(c.sc_pan as *mut GtkRange);
-    let mut vol = gtk_range_get_value(c.sc_vol as *mut GtkRange);
+    let mut pan = gtk_range_get_value(c.sc_pan.cast::<GtkRange>());
+    let mut vol = gtk_range_get_value(c.sc_vol.cast::<GtkRange>());
 
     if vol >= BBF_VOL_SLIDER_ZERO_DB {
         vol = (vol - BBF_VOL_SLIDER_ZERO_DB)
@@ -255,18 +243,14 @@ unsafe extern "C" fn on_slider_format_value(
     c_str.into_raw()
 }
 
-pub unsafe fn bbf_channel_init(
-    channel: &mut bbf_channel_t,
-    r#type: bbf_channel_type,
-    name: &'static str,
-) {
+pub unsafe fn channel_init(channel: &mut Channel, r#type: ChannelType, name: &'static str) {
     log::debug!("Init channel '{name}' ({type:?})");
 
-    *channel = bbf_channel_t::new(name, r#type);
+    *channel = Channel::new(name, r#type);
 
-    for i in 0..BBF_NOF_OUTPUTS {
-        (*channel.outputs[i]).name_l = BBF_OUTPUTS[i][0];
-        (*channel.outputs[i]).name_r = BBF_OUTPUTS[i][1];
+    for (i, output) in OUTPUTS.iter().enumerate().take(NUMBER_OF_OUTPUTS) {
+        (*channel.outputs[i]).name_l = output[0];
+        (*channel.outputs[i]).name_r = output[1];
         (*channel.outputs[i]).elem_l = ptr::null_mut();
         (*channel.outputs[i]).elem_r = ptr::null_mut();
     }
@@ -275,19 +259,19 @@ pub unsafe fn bbf_channel_init(
     channel.lbl_name = gtk_label_new(label_text.as_ptr());
     channel.sc_pan = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, -100.0, 100.0, 1.0);
 
-    gtk_range_set_value(channel.sc_pan as *mut GtkRange, 0.0);
+    gtk_range_set_value(channel.sc_pan.cast::<GtkRange>(), 0.0);
     gtk_scale_add_mark(
-        channel.sc_pan as *mut GtkScale,
+        channel.sc_pan.cast::<GtkScale>(),
         0.0,
         GTK_POS_TOP,
         ptr::null(),
     );
 
     g_signal_connect_data(
-        channel.sc_pan as *mut GObject,
-        CStr::from_bytes_with_nul_unchecked(b"value-changed\0").as_ptr(),
+        channel.sc_pan.cast::<GObject>(),
+        c"value-changed".as_ptr(),
         Some(mem::transmute(on_slider_changed as *const ())),
-        channel as *mut _ as *mut c_void,
+        std::ptr::from_mut(channel).cast::<c_void>(),
         None,
         0,
     );
@@ -299,81 +283,81 @@ pub unsafe fn bbf_channel_init(
         1.0,
     );
 
-    gtk_range_set_inverted(channel.sc_vol as *mut GtkRange, 1);
+    gtk_range_set_inverted(channel.sc_vol.cast::<GtkRange>(), 1);
     gtk_scale_add_mark(
-        channel.sc_vol as *mut GtkScale,
+        channel.sc_vol.cast::<GtkScale>(),
         BBF_VOL_SLIDER_ZERO_DB,
         GTK_POS_RIGHT,
         ptr::null(),
     );
 
     g_signal_connect_data(
-        channel.sc_vol as *mut GObject,
-        CStr::from_bytes_with_nul_unchecked(b"value-changed\0").as_ptr(),
+        channel.sc_vol.cast::<GObject>(),
+        c"value-changed".as_ptr(),
         Some(mem::transmute(on_slider_changed as *const ())),
-        channel as *mut _ as *mut c_void,
+        std::ptr::from_mut(channel).cast::<c_void>(),
         None,
         0,
     );
     g_signal_connect_data(
-        channel.sc_vol as *mut GObject,
-        CStr::from_bytes_with_nul_unchecked(b"format-value\0").as_ptr(),
-        Some(mem::transmute(on_slider_format_value as *const ())),
-        channel as *mut _ as *mut c_void,
+        channel.sc_vol.cast::<GObject>(),
+        c"format-value".as_ptr(),
+        mem::transmute(on_slider_format_value as *const ()),
+        std::ptr::from_mut(channel).cast::<c_void>(),
         None,
         0,
     );
 
-    if channel.r#type == bbf_channel_type::MIC {
+    if channel.r#type == ChannelType::Mic {
         let button_text = CString::new("48V").unwrap();
-        channel.bt_48V = gtk_toggle_button_new_with_label(button_text.as_ptr());
+        channel.bt_48v = gtk_toggle_button_new_with_label(button_text.as_ptr());
 
         g_signal_connect_data(
-            channel.bt_48V as *mut GObject,
-            CStr::from_bytes_with_nul_unchecked(b"toggled\0").as_ptr(),
-            Some(mem::transmute(on_bt_toggled_48V as *const ())),
-            channel as *mut _ as *mut c_void,
+            channel.bt_48v.cast::<GObject>(),
+            c"toggled".as_ptr(),
+            Some(mem::transmute(on_bt_toggled_48v as *const ())),
+            std::ptr::from_mut(channel).cast::<c_void>(),
             None,
             0,
         );
 
         let button_text = CString::new("PAD").unwrap();
-        channel.bt_PAD = gtk_toggle_button_new_with_label(button_text.as_ptr());
+        channel.bt_pad = gtk_toggle_button_new_with_label(button_text.as_ptr());
 
         g_signal_connect_data(
-            channel.bt_PAD as *mut GObject,
-            CStr::from_bytes_with_nul_unchecked(b"toggled\0").as_ptr(),
-            Some(mem::transmute(on_bt_toggled_PAD as *const ())),
-            channel as *mut _ as *mut c_void,
+            channel.bt_pad.cast::<GObject>(),
+            c"toggled".as_ptr(),
+            Some(mem::transmute(on_bt_toggled_pad as *const ())),
+            std::ptr::from_mut(channel).cast::<c_void>(),
             None,
             0,
         );
-    } else if channel.r#type == bbf_channel_type::INSTR {
-        channel.cb_Sens = gtk_combo_box_text_new();
+    } else if channel.r#type == ChannelType::Instr {
+        channel.cb_sens = gtk_combo_box_text_new();
         gtk_combo_box_text_append(
-            channel.cb_Sens as *mut GtkComboBoxText,
+            channel.cb_sens.cast::<GtkComboBoxText>(),
             ptr::null(),
-            CStr::from_bytes_with_nul_unchecked(b"-10 dBV\0").as_ptr(),
+            c"-10 dBV".as_ptr(),
         );
         gtk_combo_box_text_append(
-            channel.cb_Sens as *mut GtkComboBoxText,
+            channel.cb_sens.cast::<GtkComboBoxText>(),
             ptr::null(),
-            CStr::from_bytes_with_nul_unchecked(b"+4 dBu\0").as_ptr(),
+            c"+4 dBu".as_ptr(),
         );
 
         g_signal_connect_data(
-            channel.cb_Sens as *mut GObject,
-            CStr::from_bytes_with_nul_unchecked(b"changed\0").as_ptr(),
+            channel.cb_sens.cast::<GObject>(),
+            c"changed".as_ptr(),
             Some(mem::transmute(on_cb_sens as *const ())),
-            channel as *mut _ as *mut c_void,
+            std::ptr::from_mut(channel).cast::<c_void>(),
             None,
             0,
         );
     }
 }
 
-pub unsafe fn bbf_channel_reset(channel: *mut bbf_channel_t) {
-    for i in 0..BBF_NOF_OUTPUTS {
+pub unsafe fn channel_reset(channel: *mut Channel) {
+    for i in 0..NUMBER_OF_OUTPUTS {
         (*(*channel).outputs[i]).elem_l = ptr::null_mut();
         (*(*channel).outputs[i]).elem_r = ptr::null_mut();
     }
@@ -382,54 +366,49 @@ pub unsafe fn bbf_channel_reset(channel: *mut bbf_channel_t) {
     (*channel).sens = ptr::null_mut();
 }
 
-pub unsafe fn bbf_channel_set_output(channel: *mut bbf_channel_t, output: usize) {
-    if output > BBF_NOF_OUTPUTS {
+pub unsafe fn channel_set_output(channel: *mut Channel, output: usize) {
+    if output > NUMBER_OF_OUTPUTS {
         return;
     }
     (*channel).cur_output = (*channel).outputs[output];
-    bbf_update_sliders(channel);
+    update_sliders(channel);
 }
 
-pub unsafe fn bbf_channel_find_and_set(
-    channel: *mut bbf_channel_t,
-    elem: *mut snd_mixer_elem_t,
-) -> bool {
+pub unsafe fn channel_find_and_set(channel: *mut Channel, elem: *mut snd_mixer_elem_t) -> bool {
     let Ok(elem_name) = CStr::from_ptr(snd_mixer_selem_get_name(elem)).to_str() else {
         return false;
     };
 
-    if (*channel).r#type == bbf_channel_type::MIC {
+    if (*channel).r#type == ChannelType::Mic {
         if format!("Mic-{} 48V", (*channel).name) == elem_name {
             (*channel).phantom = elem;
-            snd_mixer_elem_set_callback(elem, Some(on_selem_changed_48V));
-            snd_mixer_elem_set_callback_private(elem, channel as *mut _);
-            bbf_update_switches(&mut *channel);
+            snd_mixer_elem_set_callback(elem, Some(on_selem_changed_48v));
+            snd_mixer_elem_set_callback_private(elem, channel.cast());
+            update_switches(&mut *channel);
             return true;
         }
         if format!("Mic-{} PAD", (*channel).name) == elem_name {
             (*channel).pad = elem;
             snd_mixer_elem_set_callback(elem, Some(on_selem_changed_pad));
-            snd_mixer_elem_set_callback_private(elem, channel as *mut _);
-            bbf_update_switches(&mut *channel);
+            snd_mixer_elem_set_callback_private(elem, channel.cast());
+            update_switches(&mut *channel);
             return true;
         }
-    } else if (*channel).r#type == bbf_channel_type::INSTR
+    } else if (*channel).r#type == ChannelType::Instr
         && format!("Line-{} Sens.", (*channel).name) == elem_name
     {
         (*channel).sens = elem;
         snd_mixer_elem_set_callback(elem, Some(on_selem_changed_sens));
-        snd_mixer_elem_set_callback_private(elem, channel as *mut _);
-        bbf_update_switches(&mut *channel);
+        snd_mixer_elem_set_callback_private(elem, channel.cast());
+        update_switches(&mut *channel);
         return true;
     }
-    for i in 0..BBF_NOF_OUTPUTS {
+    for i in 0..NUMBER_OF_OUTPUTS {
         for j in 0..2 {
-            let channel_type_str = if (*channel).r#type == bbf_channel_type::MIC {
-                "Mic"
-            } else if (*channel).r#type == bbf_channel_type::PCM {
-                "PCM"
-            } else {
-                "Line"
+            let channel_type_str = match (*channel).r#type {
+                ChannelType::Mic => "Mic",
+                ChannelType::Pcm => "PCM",
+                ChannelType::Line | ChannelType::Instr => "Line",
             };
 
             let output_name = if j == 0 {
@@ -448,7 +427,7 @@ pub unsafe fn bbf_channel_find_and_set(
                 }
 
                 snd_mixer_elem_set_callback(elem, Some(on_selem_changed));
-                snd_mixer_elem_set_callback_private(elem, channel as *mut _);
+                snd_mixer_elem_set_callback_private(elem, channel.cast());
 
                 return true;
             }
@@ -457,35 +436,29 @@ pub unsafe fn bbf_channel_find_and_set(
     false
 }
 
-unsafe fn bbf_update_switches(channel: &mut bbf_channel_t) {
+unsafe fn update_switches(channel: &mut Channel) {
     channel.no_signals = true;
-    if channel.r#type == bbf_channel_type::MIC {
+    if channel.r#type == ChannelType::Mic {
         if !channel.phantom.is_null() {
             let mut phantom = 0;
-            snd_mixer_selem_get_playback_switch(channel.phantom, 0, &mut phantom);
-            gtk_toggle_button_set_active(
-                channel.bt_48V as *mut _,
-                if phantom == 1 { 1 } else { 0 },
-            );
+            snd_mixer_selem_get_playback_switch(channel.phantom, 0, &raw mut phantom);
+            gtk_toggle_button_set_active(channel.bt_48v.cast(), i32::from(phantom == 1));
         }
 
         if !channel.pad.is_null() {
             let mut pad = 0;
-            snd_mixer_selem_get_playback_switch(channel.pad, 0, &mut pad);
-            gtk_toggle_button_set_active(channel.bt_PAD as *mut _, if pad == 1 { 1 } else { 0 });
+            snd_mixer_selem_get_playback_switch(channel.pad, 0, &raw mut pad);
+            gtk_toggle_button_set_active(channel.bt_pad.cast(), i32::from(pad == 1));
         }
-    } else if channel.r#type == bbf_channel_type::INSTR && !channel.sens.is_null() {
+    } else if channel.r#type == ChannelType::Instr && !channel.sens.is_null() {
         let mut item = 0;
-        snd_mixer_selem_get_enum_item(channel.sens, 0, &mut item);
-        gtk_combo_box_set_active(
-            channel.cb_Sens as *mut _,
-            /*GTK_COMBO_BOX*/ item as i32,
-        );
+        snd_mixer_selem_get_enum_item(channel.sens, 0, &raw mut item);
+        gtk_combo_box_set_active(channel.cb_sens.cast(), /*GTK_COMBO_BOX*/ item as i32);
     }
     channel.no_signals = false;
 }
 
-unsafe fn bbf_update_sliders(channel: *mut bbf_channel_t) {
+unsafe fn update_sliders(channel: *mut Channel) {
     if (*channel).cur_output.is_null()
         || (*(*channel).cur_output).elem_l.is_null()
         || (*(*channel).cur_output).elem_r.is_null()
@@ -498,8 +471,8 @@ unsafe fn bbf_update_sliders(channel: *mut bbf_channel_t) {
     let mut val_r = 0;
     let mut val_l = 0;
     let cid: snd_mixer_selem_channel_id_t = 0;
-    snd_mixer_selem_get_playback_volume((*(*channel).cur_output).elem_l, cid, &mut val_l);
-    snd_mixer_selem_get_playback_volume((*(*channel).cur_output).elem_r, cid, &mut val_r);
+    snd_mixer_selem_get_playback_volume((*(*channel).cur_output).elem_l, cid, &raw mut val_l);
+    snd_mixer_selem_get_playback_volume((*(*channel).cur_output).elem_r, cid, &raw mut val_r);
 
     let diff = val_r - val_l;
     let pan;
@@ -514,7 +487,7 @@ unsafe fn bbf_update_sliders(channel: *mut bbf_channel_t) {
         pan = 0.0;
         fader = val_l as f64;
     }
-    gtk_range_set_value((*channel).sc_pan as *mut GtkRange, pan);
+    gtk_range_set_value((*channel).sc_pan.cast::<GtkRange>(), pan);
 
     let fader = if fader >= BBF_VOL_ZERO_DB {
         ((BBF_VOL_SLIDER_MAX - BBF_VOL_SLIDER_ZERO_DB) / (BBF_VOL_MAX as f64 - BBF_VOL_ZERO_DB))
@@ -525,6 +498,6 @@ unsafe fn bbf_update_sliders(channel: *mut bbf_channel_t) {
             * fader
     };
 
-    gtk_range_set_value((*channel).sc_vol as *mut GtkRange, fader);
+    gtk_range_set_value((*channel).sc_vol.cast::<GtkRange>(), fader);
     (*channel).no_signals = false;
 }
